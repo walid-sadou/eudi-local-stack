@@ -1,0 +1,56 @@
+version: "3.8"
+
+services:
+  verifier:
+    image: ghcr.io/eu-digital-identity-wallet/eudi-srv-web-verifier-endpoint-23220-4-kt:v0.6.2
+    container_name: verifier-backend
+    ports:
+      - "8080:8080"
+    environment:
+      # API exposée sous /ui (v0.6.2)
+      SPRING_WEBFLUX_BASEPATH: ""
+      SPRING_WEBFLUX_BASE_PATH: ""
+
+      # L’URL publique mise dans le QR (on passe par HAProxy en 4443)
+      VERIFIER_PUBLICURL: "https://192.168.1.118:4443"
+
+      # OID4VP “classique” v0.6.2
+      VERIFIER_AUTHORIZATIONREQUESTSCHEME: "eudi-openid4vp"
+      VERIFIER_REQUESTJWT_EMBED: "ByReference"
+      VERIFIER_REQUESTJWT_REQUESTURIMETHOD: "Get"
+      VERIFIER_RESPONSE_MODE: "DirectPost"
+
+      # CORS (front servi via le même origin grâce à HAProxy + tests en local)
+      CORS_ORIGINS: "https://192.168.1.118:4443,http://localhost:4300,http://127.0.0.1:4300"
+      CORS_METHODS: "GET,POST,OPTIONS"
+      CORS_HEADERS: "Content-Type,Authorization"
+      CORS_CREDENTIALS: "true"
+
+  verifier-ui:
+    image: ghcr.io/eu-digital-identity-wallet/eudi-web-verifier:latest
+    container_name: verifier-ui
+    ports:
+      - "4300:4300"
+    environment:
+      # Très important : le front tape l’API à la même origine (HAProxy) :
+      # un point => “.” = même origin, pas de CORS coté navigateur
+      HOST_API: "."
+      DOMAIN_NAME: ""
+    depends_on:
+      - verifier
+
+  haproxy:
+    image: haproxy:2.7.12
+    container_name: haproxy
+    # On expose 4443(hôte) -> 8443(conteneur)
+    ports:
+      - "4443:8443"
+    volumes:
+      - ./haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+      # Cert PEM (clé + cert) auto-signé ou réel :
+      - ./haproxy.pem:/etc/ssl/certs/mysite.pem:ro
+    # 8443 > 1024 => pas besoin de cap NET_BIND_SERVICE
+    depends_on:
+      - verifier
+      - verifier-ui
+

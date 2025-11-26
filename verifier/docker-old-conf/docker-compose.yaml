@@ -1,0 +1,40 @@
+version: "3.8"
+
+services:
+  verifier:
+    image: ghcr.io/eu-digital-identity-wallet/eudi-srv-web-verifier-endpoint-23220-4-kt:v0.6.2
+    container_name: verifier-backend
+    ports:
+      - "8080:8080"
+    environment:
+      # BasePath nécessaire pour la version 0.6.2
+      SPRING_WEBFLUX_BASEPATH: ""
+      SPRING_WEBFLUX_BASE_PATH: ""
+
+      # URL publique du backend (celle donnée par Cloudflare)
+      VERIFIER_PUBLICURL: "${PUBLIC_URL}"
+
+      # Paramètres OID4VP classiques
+      VERIFIER_AUTHORIZATIONREQUESTSCHEME: "eudi-openid4vp"
+      VERIFIER_REQUESTJWT_EMBED: "ByReference"
+      VERIFIER_REQUESTJWT_REQUESTURIMETHOD: "Get"
+      VERIFIER_RESPONSE_MODE: "DirectPost"
+
+      # CORS — autorise le front local + Cloudflare
+      CORS_ORIGINS: "${UI_ORIGIN},http://localhost:4300,http://127.0.0.1:4300"
+      CORS_METHODS: "GET,POST,OPTIONS"
+      CORS_HEADERS: "Content-Type,Authorization"
+      CORS_CREDENTIALS: "true"
+
+  verifier-ui:
+    image: ghcr.io/eu-digital-identity-wallet/eudi-web-verifier:latest
+    container_name: verifier-ui
+    ports:
+      - "4300:4300"
+    environment:
+      # Le front appelle l'API locale du backend
+      HOST_API: "http://localhost:8080"
+      DOMAIN_NAME: ""
+    depends_on:
+      - verifier
+

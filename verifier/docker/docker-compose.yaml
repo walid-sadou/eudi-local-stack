@@ -1,0 +1,49 @@
+version: "3.8"
+
+services:
+  verifier-backend:
+    image: ghcr.io/eu-digital-identity-wallet/eudi-srv-web-verifier-endpoint-23220-4-kt:latest
+    container_name: verifier-backend
+    environment:
+      # URL publique telle que vue par le Wallet (via l’émulateur)
+      VERIFIER_PUBLICURL: "https://10.0.2.2:9444"
+
+      # Mode de réponse utilisé par le verifier dans la JAR
+      VERIFIER_RESPONSE_MODE: "DirectPost"
+      # (rien à ajouter pour le client_id, le "Verifier" que tu as mis
+      # en dur côté wallet suffit)
+
+    networks:
+      - verifier_net
+
+  verifier-ui:
+    image: ghcr.io/eu-digital-identity-wallet/eudi-web-verifier:latest
+    container_name: verifier-ui
+    ports:
+      - "4300:4300"
+    environment:
+      DOMAIN_NAME: ""
+      # L’UI appelle le backend via le même endpoint que le wallet
+      HOST_API: "https://10.0.2.2:9444"
+    networks:
+      - verifier_net
+
+  verifier-haproxy:
+    image: haproxy:2.8.3
+    container_name: verifier-haproxy
+    depends_on:
+      - verifier-backend
+      - verifier-ui
+    ports:
+      - "9081:8080"    # HTTP (si tu veux tester en clair)
+      - "9444:8443"    # HTTPS exposé au Mac + émulateur
+    volumes:
+      - ./haproxy.conf:/usr/local/etc/haproxy/haproxy.cfg:ro
+      - ./haproxy.pem:/etc/ssl/certs/mysite.pem:ro
+    networks:
+      - verifier_net
+
+networks:
+  verifier_net:
+    driver: bridge
+

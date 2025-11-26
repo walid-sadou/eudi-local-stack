@@ -1,0 +1,75 @@
+global
+    maxconn 50000
+    log stdout format raw local0
+    user root
+    group root
+    nbthread 4
+    cpu-map auto:1/1-4 0-3
+    ssl-default-bind-options ssl-min-ver TLSv1.2
+
+defaults
+    timeout connect 10s
+    timeout client 30s
+    timeout server 30s
+    log global
+    mode http
+    option httplog
+    maxconn 3000
+    default_backend no-match
+
+frontend all
+    bind 0.0.0.0:8080
+    bind 0.0.0.0:8443 ssl crt /etc/ssl/certs/localhost.tls.pem
+
+    # Keycloak - /idp/...
+    use_backend keycloak-backend if { path_beg /idp }
+
+    # Discovery OAuth Authorization Server :
+    #   /.well-known/oauth-authorization-server/idp/realms/pid-issuer-realm
+    use_backend keycloak-backend if { path_beg /.well-known/oauth-authorization-server/idp/realms/pid-issuer-realm }
+
+    # Métadonnée JWT issuer (DC4EU / PID issuer)
+    use_backend pid-issuer-metadata if { path /.well-known/jwt-issuer/pid-issuer }
+
+    # Discovery OpenID4VCI :
+    #   /.well-known/openid-credential-issuer
+    #   /.well-known/openid-credential-issuer/pid-issuer
+    use_backend pid-issuer-backend if { path_beg /.well-known/openid-credential-issuer }
+
+    # Tout le reste de l’issuer (API, endpoints, etc.)
+    use_backend pid-issuer-backend if { path_beg /pid-issuer }
+
+    # Si aucune règle ne matche
+    default_backend no-match
+
+backend keycloak-backend
+    balance roundrobin
+    cookie SERVERUSED insert indirect nocache
+    option forwarded proto host by by_port for
+
+    # Réécriture pour discovery OAuth Authorization Server :
+    # On reçoit : /.well-known/oauth-authorization-server/idp/realms/pid-issuer-realm
+    # On envoie à Keycloak : /idp/realms/pid-issuer-realm/.well-known/oauth-authorization-server
+    http-request set-path /idp/realms/pid-issuer-realm/.well-known/oauth-authorization-server if { path_beg /.well-known/oauth-authorization-server/idp/realms/pid-issuer-realm }
+
+    server server1 keycloak:8080 cookie server1
+
+backend pid-issuer-metadata
+    # Réponse statique pour /.well-known/jwt-issuer/pid-issuer
+    http-request return status 200 content-type "application/json" lf-string "{\"issuer\":\"https://10.0.2.2:9443/pid-issuer\",\"jwks_uri\":\"https://10.0.2.2:9443/pid-issuer/public_keys.jwks\"}"
+
+backend pid-issuer-backend
+    balance roundrobin
+    cookie SERVERUSED insert indirect nocache
+    option forwarded proto host by by_port for
+
+    # Réécriture pour discovery OpenID4VCI :
+    # On reçoit : /.well-known/openid-credential-issuer/pid-issuer
+    # On envoie : /pid-issuer/.well-known/openid-credential-issuer
+    http-request set-path /pid-issuer/.well-known/openid-credential-issuer if { path /.well-known/openid-credential-issuer/pid-issuer }
+
+    server server1 pid-issuer:8080 cookie server1
+
+backend no-match
+    http-request deny deny_status 404
+

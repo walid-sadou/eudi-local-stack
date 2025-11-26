@@ -1,0 +1,75 @@
+{
+  "dcql_query": {
+    "credentials": [
+      {
+        "id": "employment_input",
+        "format": "dc+sd-jwt",
+        "meta": {
+          "vct_values": ["emp_card"]
+        },
+        "claims": [
+          {
+            "id": "dateOfBirth",
+            "path": [
+              "dateOfBirth"
+            ]
+          },
+          {
+            "id": "dob",
+            "path": [
+              "dob"
+            ]
+          }
+        ],
+        "claim_sets": [
+          [
+            "dateOfBirth"
+          ],
+          [
+            "dob"
+          ]
+        ]
+      },
+      {
+        "id": "employment_input_2",
+        "format": "dc+sd-jwt",
+        "meta": {
+          "vct_values": ["emp_card"]
+        },
+        "claims": [
+          {
+            "id": "dateOfBirth",
+            "path": [
+              "dateOfBirth"
+            ]
+          },
+          {
+            "id": "dob",
+            "path": [
+              "dob"
+            ]
+          }
+        ],
+        "claim_sets": [
+          [
+            "dateOfBirth"
+          ],
+          [
+            "dob"
+          ]
+        ]
+      }
+    ],
+    "credential_sets": [
+      {
+        "options": [
+          [
+            "employment_input",
+            "employment_input_2"
+          ]
+        ]
+      }
+    ]
+  },
+  "nonce": "nonce"
+}

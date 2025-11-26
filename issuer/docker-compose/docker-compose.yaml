@@ -1,0 +1,131 @@
+version: "3.8"
+
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.3.2-0
+    container_name: keycloak
+    command:
+      - start-dev
+      - --import-realm
+    environment:
+      # Keycloak derrière HAProxy (TLS terminé devant)
+      KC_HTTP_ENABLED: "true"
+      KC_HOSTNAME: "10.0.2.2"              # hostname externe vu par le wallet
+      KC_HOSTNAME_STRICT: "false"
+      KC_HOSTNAME_STRICT_HTTPS: "false"
+      KC_HTTP_RELATIVE_PATH: "/idp"        # donc URL externe = https://10.0.2.2:9443/idp/...
+      KC_PROXY_HEADERS: "xforwarded"       # fait confiance à X-Forwarded-*
+      KC_PROXY: "edge"                     # Keycloak derrière un reverse proxy en mode edge
+
+      # Admin (console)
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+
+      # Bootstrap (utilisé au 1er démarrage, tu peux les laisser)
+      KC_BOOTSTRAP_ADMIN_USERNAME: "admin"
+      KC_BOOTSTRAP_ADMIN_PASSWORD: "password"
+    ports:
+      - "8081:8080"                        # UI d’admin Keycloak (http://localhost:8081/idp)
+    healthcheck:
+      test: ["CMD-SHELL", "bash /opt/keycloak/health-check.sh"]
+      interval: 5s
+      timeout: 10s
+      retries: 12
+      start_period: 30s
+    volumes:
+      - ./keycloak/extra/health-check.sh:/opt/keycloak/health-check.sh
+      - ./keycloak/realms/:/opt/keycloak/data/import
+    networks:
+      - default
+
+  pid-issuer:
+    image: ghcr.io/eu-digital-identity-wallet/eudi-srv-pid-issuer:edge
+    container_name: pid-issuer
+    depends_on:
+      keycloak:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: "insecure"
+      SERVER_PORT: 8080
+      SERVER_FORWARD_HEADERS_STRATEGY: "FRAMEWORK"
+
+      # URL publique vue par le wallet (on ne change pas)
+      ISSUER_PUBLICURL: "https://10.0.2.2:9443"
+
+      # URL publique de l’AS vue par le wallet (idem)
+      ISSUER_AUTHORIZATIONSERVER_PUBLICURL: "https://10.0.2.2:9443/idp/realms/pid-issuer-realm"
+
+      # Metadata OIDC côté issuer (on peut laisser sur keycloak direct)
+      ISSUER_AUTHORIZATIONSERVER_METADATA: "http://keycloak:8080/idp/realms/pid-issuer-realm/.well-known/openid-configuration"
+
+      # ⚠️ FORCER l’URL d’introspection côté issuer (INTERNE, pas 10.0.2.2)
+      ISSUER_AUTHORIZATIONSERVER_INTROSPECTION: "https://haproxy:8443/idp/realms/pid-issuer-realm/protocol/openid-connect/token/introspect"
+
+      # Ressource server en mode OPAQUE
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_OPAQUETOKEN_CLIENT_ID: "pid-issuer-srv"
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_OPAQUETOKEN_CLIENT_SECRET: "zIKAV9DIIIaJCzHCVBPlySgU8KgY68U2"
+
+      # ❌ Et tu VIRES la ligne JWT qu’on avait ajoutée :
+      # SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: ...
+
+      # le reste inchangé
+      ISSUER_CREDENTIALRESPONSEENCRYPTION_SUPPORTED: "true"
+      ISSUER_CREDENTIALRESPONSEENCRYPTION_REQUIRED: "true"
+      ISSUER_CREDENTIALRESPONSEENCRYPTION_ALGORITHMSSUPPORTED: "ECDH-ES"
+      ISSUER_CREDENTIALRESPONSEENCRYPTION_ENCRYPTIONMETHODS: "A128GCM"
+
+      ISSUER_PID_MSO_MDOC_ENABLED: "true"
+      ISSUER_PID_MSO_MDOC_ENCODER_DURATION: "P30D"
+      ISSUER_PID_MSO_MDOC_NOTIFICATIONS_ENABLED: "true"
+
+      ISSUER_PID_SD_JWT_VC_ENABLED: "true"
+      ISSUER_PID_SD_JWT_VC_NOTUSEBEFORE: "PT20S"
+      ISSUER_PID_SD_JWT_VC_NOTIFICATIONS_ENABLED: "true"
+
+      ISSUER_PID_ISSUINGCOUNTRY: "GR"
+      ISSUER_PID_ISSUINGJURISDICTION: "GR-I"
+
+      ISSUER_MDL_ENABLED: "true"
+      ISSUER_MDL_MSO_MDOC_ENCODER_DURATION: "P5D"
+      ISSUER_MDL_NOTIFICATIONS_ENABLED: "true"
+
+      ISSUER_CREDENTIALOFFER_URI: "openid-credential-offer://"
+      ISSUER_SIGNING_KEY: "GenerateRandom"
+
+      ISSUER_KEYCLOAK_SERVER_URL: "http://keycloak:8080/idp"
+      ISSUER_KEYCLOAK_AUTHENTICATION_REALM: "master"
+      ISSUER_KEYCLOAK_CLIENT_ID: "admin-cli"
+      ISSUER_KEYCLOAK_USERNAME: "admin"
+      ISSUER_KEYCLOAK_PASSWORD: "password"
+      ISSUER_KEYCLOAK_USER_REALM: "pid-issuer-realm"
+
+      ISSUER_DPOP_PROOF_MAX_AGE: "PT1M"
+      ISSUER_DPOP_CACHE_PURGE_INTERVAL: "PT10M"
+      ISSUER_DPOP_REALM: "pid-issuer"
+      ISSUER_DPOP_NONCE_ENABLED: "false"
+
+      ISSUER_CREDENTIALENDPOINT_BATCHISSUANCE_ENABLED: "true"
+      ISSUER_CREDENTIALENDPOINT_BATCHISSUANCE_BATCHSIZE: "10"
+      ISSUER_CNONCE_EXPIRATION: "PT5M"
+
+  haproxy:
+    image: haproxy:2.8.3
+    container_name: haproxy
+    depends_on:
+      keycloak:
+        condition: service_healthy
+      pid-issuer:
+        condition: service_started
+    ports:
+      - "9080:8080"                        # HTTP (debug)
+      - "9443:8443"                        # HTTPS → utilisé par l’émulateur (https://10.0.2.2:9443/...)
+    volumes:
+      - ./haproxy/haproxy.conf:/usr/local/etc/haproxy/haproxy.cfg
+      - ./haproxy/certs/:/etc/ssl/certs/
+    networks:
+      - default
+
+networks:
+  default:
+    driver: bridge
+

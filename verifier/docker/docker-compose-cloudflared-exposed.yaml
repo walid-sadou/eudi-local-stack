@@ -1,0 +1,54 @@
+version: "3.8"
+
+services:
+  verifier:
+    image: ghcr.io/eu-digital-identity-wallet/eudi-srv-web-verifier-endpoint-23220-4-kt:v0.6.2
+    container_name: verifier-backend
+    environment:
+      # API base-path in v0.6.2
+      SPRING_WEBFLUX_BASEPATH: ""
+      SPRING_WEBFLUX_BASE_PATH: ""
+
+      # URL placed into the QR (adjust when you use Cloudflare)
+      VERIFIER_PUBLICURL: "${PUBLIC_URL}"
+
+      # OID4VP knobs compatible with v0.6.2
+      VERIFIER_AUTHORIZATIONREQUESTSCHEME: "eudi-openid4vp"
+      VERIFIER_REQUESTJWT_EMBED: "ByReference"
+      VERIFIER_REQUESTJWT_REQUESTURIMETHOD: "Get"
+      VERIFIER_RESPONSE_MODE: "DirectPost"
+
+      # CORS (kept permissive to avoid surprises)
+      CORS_ORIGINS: "https://localhost:4443,${CLOUDFLARE_HOST},http://localhost:4300"
+      CORS_METHODS: "GET,POST,OPTIONS"
+      CORS_HEADERS: "Content-Type,Authorization"
+      CORS_CREDENTIALS: "true"
+    expose:
+      - "8080"             # only inside the compose network
+    restart: unless-stopped
+
+  verifier-ui:
+    image: ghcr.io/eu-digital-identity-wallet/eudi-web-verifier:latest
+    container_name: verifier-ui
+    environment:
+      # IMPORTANT: same-origin calls (the proxy in front decides)
+      HOST_API: "."         # empty => front will use same origin
+      DOMAIN_NAME: ""
+    expose:
+      - "4300"
+    restart: unless-stopped
+
+  haproxy:
+    image: haproxy:2.8
+    container_name: haproxy
+    ports:
+      - "4443:8443"        # single public HTTPS origin
+    volumes:
+      - ./haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+      # self-signed cert is fine for local; put a real PEM if you have it
+      - ./haproxy.pem:/etc/ssl/certs/site.pem:ro
+    depends_on:
+      - verifier
+      - verifier-ui
+    restart: unless-stopped
+

@@ -1,0 +1,4 @@
+basicConstraints=CA:FALSE
+keyUsage=critical,digitalSignature,keyEncipherment
+extendedKeyUsage=serverAuth
+subjectAltName=IP:10.0.2.2,DNS:threatdragon.local
