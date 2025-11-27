@@ -330,6 +330,73 @@ Vous devez voir les services `keycloak`, `pid-issuer`, `haproxy` en **Up**.
 - Accéder à l’admin Keycloak : <http://localhost:8081/idp> (**admin / password**).  
 - L’issuer sera atteint par le Wallet via : `https://10.0.2.2:9443`.  
 
+### 4.5. Utilisateur de test pré-généré dans le realm
+
+Le realm importé pour cet environnement contient un **utilisateur de test** déjà créé, avec des attributs réalistes permettant de tester l’émission d’un PID :
+
+```json
+{
+  "realm": "pid-issuer-realm",
+  "users": [
+    {
+      "id": "60b8ba5f-c73f-4976-b0da-48d0e53335de",
+      "createdTimestamp": 1700060364127,
+      "username": "tneal",
+      "enabled": true,
+      "email": "tyler.neal@example.com",
+      "emailVerified": true,
+      "firstName": "Tyler",
+      "lastName": "Neal",
+      "attributes": {
+        "gender": ["1"],
+        "gender_as_string": ["male"],
+        "birthdate": ["1955-04-12"],
+        "street": ["Trauner"],
+        "address_house_number": ["101"],
+        "locality": ["Gemeinde Biberbach"],
+        "region": ["Lower Austria"],
+        "postal_code": ["3331"],
+        "country": ["AT"],
+        "birth_country": ["AT"],
+        "birth_city": ["Gemeinde Biberbach"],
+        "birth_place": ["101 Trauner"],
+        "nationality": ["AT"],
+        "birth_family_name": ["Neal"],
+        "birth_given_name": ["Tyler"]
+      },
+      "realmRoles": [
+        "eid-holder-natural-person"
+      ]
+    },
+    {
+      "username": "service-account-pid-issuer-srv",
+      "serviceAccountClientId": "pid-issuer-srv",
+      "realmRoles": [
+        "default-roles-pid-issuer-realm"
+      ],
+      "clientRoles": {
+        "pid-issuer-srv": [
+          "uma_protection"
+        ]
+      }
+    }
+  ]
+}
+```
+
+En pratique :
+
+- **username** : `tneal`  
+- **rôle** : `eid-holder-natural-person` (titulaire « citoyen »)  
+- **usage** : permet de tester un flux complet d’authentification / émission de PID sans créer d’utilisateur à la main.
+
+Le mot de passe est déjà défini dans le JSON du realm (`keycloak/realms/...`).  
+Si besoin, vous pouvez le réinitialiser via l’UI :
+
+1. Ouvrir Keycloak (`http://localhost:8081/idp`),  
+2. Aller dans le realm `pid-issuer-realm` → **Users**,  
+3. Sélectionner `tneal` et définir un nouveau mot de passe pour vos tests.
+
 ---
 
 ## 5. Lancer le Wallet Android
@@ -377,26 +444,31 @@ Une fois toutes les briques démarrées :
 
 ### 6.1. Vérifier que l’Issuer est UP
 
-- Accéder à son UI / logs.
+- Accéder à ses logs.
 - Vérifier que l’endpoint d’émission PID est disponible (via l’issuer).
 
-### 6.2. Émettre un PID vers le Wallet
+### 6.2. Émettre un PID vers le Wallet (via deep link depuis l’émulateur)
 
-- Suivre le flux prévu par l’issuer (QR code ou deep link).
-- Scanner le QR ou ouvrir le lien depuis l’émulateur (selon le setup fourni).
-- Vérifier que le Wallet reçoit et stocke un PID (mDoc).
+Dans ce setup, **l’émission se fait systématiquement par deep link ouvert depuis l’émulateur** :
+
+1. Depuis l’issuer, déclencher une offre de credential (PID) qui génère une URL d’`openid-credential-offer://...`.  
+2. Copier cette URL dans le navigateur de l’émulateur Android (ou utiliser un petit helper pour ouvrir le deep link).  
+3. Le Wallet dans l’émulateur intercepte le deep link et propose de stocker le PID (mDoc).  
+4. Vérifier dans le Wallet que le PID est bien présent.
+
+> 📌 Pas de QR code ici : le scénario est volontairement simplifié pour un usage 100 % local via deep link.
 
 ### 6.3. Tester la présentation du PID vers le Verifier
 
-- Ouvrir l’UI du verifier (port `4300` sur votre machine).
-- Démarrer une nouvelle “verification request” via l’UI.
-- Scanner le QR avec le Wallet dans l’émulateur.
+- Ouvrir l’UI du verifier (port `4300` sur votre machine).  
+- Démarrer une nouvelle “verification request” via l’UI (génération d’un QR ou d’un lien).  
+- Depuis l’émulateur, ouvrir le lien de présentation (ou scanner le QR si vous avez un pont caméra entre host et émulateur).
 
 Le Wallet doit :
 
-- appeler `https://10.0.2.2:9444/wallet/request.jwt/...`,
-- proposer le PID en présentation,
-- envoyer la réponse vers le verifier.
+- appeler `https://10.0.2.2:9444/wallet/request.jwt/...`,  
+- proposer le PID en présentation,  
+- envoyer la réponse vers le verifier.  
 
 Le verifier doit afficher le résultat de la vérification (succès).
 
