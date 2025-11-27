@@ -499,7 +499,7 @@ En pratique, cela signifie que :
   - soit vous devez les signer avec la même clé/certificat déjà installé dans l’émulateur,
   - soit vous devez **réinstaller un nouveau certificat de confiance dans l’émulateur** et refaire la démarche.
 
-👉 Dans l’état, cette stack fonctionne donc uniquement avec **les certificats fournis / attendus par ce repo**. Si vous changez de certificats, vous devez impérativement refaire la procédure d’installation du certificat dans l’émulateur pour que le Wallet continue à accepter les connexions HTTPS.
+  👉 Dans l’état, cette stack fonctionne donc uniquement avec **les certificats fournis / attendus par ce repo**. Si vous changez de certificats, vous devez impérativement refaire la procédure d’installation du certificat dans l’émulateur pour que le Wallet continue à accepter les connexions HTTPS.
 ---
 ## 8. Dépannage rapide (FAQ)
 
@@ -539,23 +539,3 @@ curl -vk https://localhost:9443
 
 → Le verifier reçoit un SD-JWT VC alors que la vérification via issuer-metadata n’est pas activée.  
 → Ici, le Wallet est configuré pour n’envoyer que du `mso_mdoc` pour ce scénario, ce qui contourne le problème pour la démo.
-
-## 8. Certificats TLS et confiance du Wallet
-
-Par défaut, l’émulateur Android ne connaît pas nos certificats TLS « maison ». Pour que le Wallet accepte les connexions HTTPS vers l’issuer et le verifier, nous avons :
-
-- généré un certificat TLS local (utilisé côté verifier) ;
-- installé **ce même certificat** manuellement dans l’émulateur Android comme certificat de confiance (certificat utilisateur) ;
-- réutilisé ce certificat pour signer/terminer TLS côté :
-  - HAProxy du verifier (`https://10.0.2.2:9444`),
-  - HAProxy de l’issuer (`https://10.0.2.2:9443`).
-
-En pratique, cela signifie que :
-
-- le Wallet fait confiance uniquement aux endpoints HTTPS qui présentent **ce certificat précis** (ou un certificat signé par la même clé) ;
-- si vous changez ou régénérez les certificats TLS côté issuer/verifier :
-  - soit vous devez les signer avec la même clé/certificat déjà installé dans l’émulateur,
-  - soit vous devez **réinstaller un nouveau certificat de confiance dans l’émulateur** et refaire la démarche.
-
-👉 Dans l’état, cette stack fonctionne donc uniquement avec **les certificats fournis / attendus par ce repo**. Si vous changez de certificats, vous devez impérativement refaire la procédure d’installation du certificat dans l’émulateur pour que le Wallet continue à accepter les connexions HTTPS.
-
