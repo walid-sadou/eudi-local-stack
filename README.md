@@ -2,7 +2,7 @@
 
 Ce dépôt permet de lancer en local un scénario de bout en bout :
 
-> Issuer → Wallet (PID) → Verifier local (via émulateur Android + HTTPS)
+> Issuer ↔ Wallet (PID) ↔ Verifier local (via émulateur Android + HTTPS)
 
 Il regroupe :
 
@@ -55,8 +55,8 @@ En local, on va :
 
 **Architecture logique du test :**
 
-1. L’**Issuer** émet un PID vers le Wallet.  
-2. Le **Wallet** stocke ce PID (mDoc).  
+1. Le **Wallet** déclenche un flux d’**émission** et appelle l’**Issuer local** (`https://10.0.2.2:9443/...`) pour obtenir un PID.  
+2. Le Wallet stocke ce PID (mDoc).  
 3. Le **Verifier** lance une requête de présentation.  
 4. Le Wallet, sur l’émulateur, appelle le verifier via `https://10.0.2.2:9444/...` et présente le PID.  
 
@@ -165,7 +165,7 @@ curl -vk https://localhost:9444/
 
 ## 4. Lancer l’Issuer local
 
-L’Issuer s’appuie sur **Keycloak** et un **HAProxy** dédié. Il est utilisé pour émettre un PID vers le Wallet.
+L’Issuer s’appuie sur **Keycloak** et un **HAProxy** dédié. Il est utilisé comme backend d’émission lorsque le Wallet demande un PID.
 
 ### 4.1. Aller dans le dossier issuer
 
@@ -231,10 +231,10 @@ services:
       SERVER_PORT: 8080
       SERVER_FORWARD_HEADERS_STRATEGY: "FRAMEWORK"
 
-      # URL publique vue par le wallet (on ne change pas)
+      # URL publique vue par le wallet
       ISSUER_PUBLICURL: "https://10.0.2.2:9443"
 
-      # URL publique de l’AS vue par le wallet (idem)
+      # URL publique de l’AS vue par le wallet
       ISSUER_AUTHORIZATIONSERVER_PUBLICURL: "https://10.0.2.2:9443/idp/realms/pid-issuer-realm"
 
       # Metadata OIDC côté issuer (interne vers Keycloak)
@@ -432,8 +432,8 @@ La configuration spécifique au verifier local est déjà câblée dans le code,
 
 ### 5.3. Lancer l’émulateur + l’app
 
-- Créer un AVD si nécessaire (Pixel 5, Android 13 par ex.).
-- Sélectionner la configuration `app` et cliquer sur **Run ▶**.
+- Créer un AVD si nécessaire (Pixel 5, Android 13 par ex.).  
+- Sélectionner la configuration `app` et cliquer sur **Run ▶**.  
 - L’app Wallet doit se lancer dans l’émulateur.
 
 ---
@@ -444,25 +444,31 @@ Une fois toutes les briques démarrées :
 
 ### 6.1. Vérifier que l’Issuer est UP
 
-- Accéder à ses logs.
-- Vérifier que l’endpoint d’émission PID est disponible (via l’issuer).
+- Vérifier que les conteneurs `keycloak`, `pid-issuer`, `haproxy` sont **Up** :  
 
-### 6.2. Émettre un PID vers le Wallet (via deep link depuis l’émulateur)
+```bash
+docker compose ps
+```
 
-Dans ce setup, **l’émission se fait systématiquement par deep link ouvert depuis l’émulateur** :
+- Accéder à Keycloak : <http://localhost:8081/idp>.
 
-1. Depuis l’issuer, déclencher une offre de credential (PID) qui génère une URL d’`openid-credential-offer://...`.  
-2. Copier cette URL dans le navigateur de l’émulateur Android (ou utiliser un petit helper pour ouvrir le deep link).  
-3. Le Wallet dans l’émulateur intercepte le deep link et propose de stocker le PID (mDoc).  
-4. Vérifier dans le Wallet que le PID est bien présent.
+### 6.2. Émettre un PID vers le Wallet (flux initié depuis le Wallet)
 
-> 📌 Pas de QR code ici : le scénario est volontairement simplifié pour un usage 100 % local via deep link.
+Dans ce setup, **c’est le Wallet qui initie l’émission de PID** vers l’issuer local :
+
+1. Dans l’app Wallet (dans l’émulateur), aller dans le menu permettant d’**ajouter un nouveau credential / PID**.  
+2. Choisir l’option correspondant à l’**issuer local** (configuré pour pointer vers `https://10.0.2.2:9443`).  
+3. Le Wallet redirige vers Keycloak (authentification de l’utilisateur `tneal` dans le realm `pid-issuer-realm`).  
+4. Une fois l’auth terminée, l’issuer renvoie un PID au Wallet.  
+5. Vérifier dans le Wallet que le PID (mDoc) est bien stocké.
+
+> 📌 Il n’y a pas de QR à scanner ni d’URL à copier/coller : toute l’initiation du flux se fait directement dans l’UI du Wallet, qui contacte l’issuer local.
 
 ### 6.3. Tester la présentation du PID vers le Verifier
 
-- Ouvrir l’UI du verifier (port `4300` sur votre machine).  
-- Démarrer une nouvelle “verification request” via l’UI (génération d’un QR ou d’un lien).  
-- Depuis l’émulateur, ouvrir le lien de présentation (ou scanner le QR si vous avez un pont caméra entre host et émulateur).
+1. Ouvrir l’UI du verifier (port `4300` sur votre machine).  
+2. Démarrer une nouvelle “verification request” via l’UI (génération d’un QR ou d’un lien).  
+3. Depuis l’émulateur, utiliser le Wallet pour répondre à cette requête (scan du QR ou ouverture du lien selon votre configuration).  
 
 Le Wallet doit :
 
