@@ -327,7 +327,7 @@ Vous devez voir les services `keycloak`, `pid-issuer`, `haproxy` en **Up**.
 
 ### 4.4. Test rapide
 
-- Accéder à l’admin Keycloak : <http://localhost:8081/idp> (admin / admin).  
+- Accéder à l’admin Keycloak : <http://localhost:8081/idp> (**admin / password**).  
 - L’issuer sera atteint par le Wallet via : `https://10.0.2.2:9443`.  
 
 ---
