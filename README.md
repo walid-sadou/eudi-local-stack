@@ -8,7 +8,9 @@ Il regroupe :
 
 - `wallet/`   → Wallet Android EUDI  
 - `verifier/` → Verifier (backend + UI web)  
-- `issuer/`   → Issuer PID  
+- `issuer/`   → Issuer PID (+ Keycloak + HAProxy)  
+
+L’objectif est que n’importe quel·le collègue puisse rejouer le flux **sans** avoir à reconfigurer TLS, Docker, Android, Keycloak, etc.
 
 ---
 
@@ -46,23 +48,23 @@ Test rapide Android :
 En local, on va :
 
 - faire tourner **Issuer** et **Verifier** dans des conteneurs Docker,  
-- faire tourner **HAProxy** devant le verifier pour gérer le HTTPS,  
-- lancer le **Wallet Android** dans un émulateur, qui communiquera avec le verifier via l’IP spéciale `10.0.2.2`.
+- faire tourner **HAProxy** devant ces services pour gérer le HTTPS,  
+- lancer le **Wallet Android** dans un émulateur, qui communiquera avec les backends via l’IP spéciale `10.0.2.2`.
 
 🔍 `10.0.2.2` est l’alias standard dans l’émulateur Android qui pointe sur le **localhost de votre machine** (là où tourne Docker).
 
 **Architecture logique du test :**
 
-- L’Issuer émet un PID vers le Wallet.  
-- Le Wallet stocke ce PID (mDoc).  
-- Le Verifier lance une requête de présentation.  
-- Le Wallet, sur l’émulateur, appelle le verifier via `https://10.0.2.2:9444/...` et présente le PID.  
+1. L’**Issuer** émet un PID vers le Wallet.  
+2. Le **Wallet** stocke ce PID (mDoc).  
+3. Le **Verifier** lance une requête de présentation.  
+4. Le Wallet, sur l’émulateur, appelle le verifier via `https://10.0.2.2:9444/...` et présente le PID.  
 
 ---
 
 ## 3. Lancer le Verifier local
 
-On commence par le composant le plus sensible : le verifier (backend + UI + proxy TLS).
+On commence par le composant verifier (backend + UI + HAProxy).
 
 ### 3.1. Aller dans le dossier verifier
 
@@ -74,9 +76,9 @@ cd verifier/docker
 
 *(Adaptez le chemin si besoin pour pointer sur le dossier contenant le `docker-compose.yml` du verifier.)*
 
-### 3.2. Vérifier / adapter le `docker-compose.yml`
+### 3.2. `docker-compose.yml` du verifier
 
-Le fichier `docker-compose.yml` doit ressembler à ceci :
+Le fichier `docker-compose.yml` ressemble à ceci :
 
 ```yaml
 version: "3.8"
@@ -132,11 +134,11 @@ networks:
 Points importants :
 
 - `VERIFIER_PUBLICURL="https://10.0.2.2:9444"`  
-  → URL utilisée par le Wallet **depuis l’émulateur**.
+  → URL utilisée par le Wallet **depuis l’émulateur**.  
 - `HOST_API="https://10.0.2.2:9444"`  
-  → l’UI parle au même endpoint que le Wallet (via HAProxy).
+  → l’UI parle au même endpoint que le Wallet (via HAProxy).  
 - `9444:8443`  
-  → 8443 = port HTTPS interne dans le conteneur HAProxy, exposé sur 9444 sur votre machine.
+  → 8443 = port HTTPS interne dans le conteneur HAProxy, exposé sur 9444 sur votre machine.  
 
 ### 3.3. Démarrer le verifier
 
@@ -163,7 +165,7 @@ curl -vk https://localhost:9444/
 
 ## 4. Lancer l’Issuer local
 
-L’Issuer est utilisé pour émettre un PID vers le Wallet.
+L’Issuer s’appuie sur **Keycloak** et un **HAProxy** dédié. Il est utilisé pour émettre un PID vers le Wallet.
 
 ### 4.1. Aller dans le dossier issuer
 
@@ -173,17 +175,146 @@ Depuis la racine du repo :
 cd issuer/docker
 ```
 
-### 4.2. Fichier `.env` / configuration
+### 4.2. `docker-compose.yml` de l’issuer
 
-Un fichier `.env` (ou équivalent) doit être présent avec des valeurs déjà adaptées au contexte local (URLs, ports, certifs, etc.).
+Le fichier `docker-compose.yml` ressemble à ceci :
 
-Si besoin, dupliquez un `.env.example` en `.env` :
+```yaml
+version: "3.8"
 
-```bash
-cp .env.example .env
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.3.2-0
+    container_name: keycloak
+    command:
+      - start-dev
+      - --import-realm
+    environment:
+      # Keycloak derrière HAProxy (TLS terminé devant)
+      KC_HTTP_ENABLED: "true"
+      KC_HOSTNAME: "10.0.2.2"              # hostname externe vu par le wallet
+      KC_HOSTNAME_STRICT: "false"
+      KC_HOSTNAME_STRICT_HTTPS: "false"
+      KC_HTTP_RELATIVE_PATH: "/idp"        # donc URL externe = https://10.0.2.2:9443/idp/...
+      KC_PROXY_HEADERS: "xforwarded"       # fait confiance à X-Forwarded-*
+      KC_PROXY: "edge"                     # Keycloak derrière un reverse proxy en mode edge
+
+      # Admin (console)
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+
+      # Bootstrap (utilisé au 1er démarrage, tu peux les laisser)
+      KC_BOOTSTRAP_ADMIN_USERNAME: "admin"
+      KC_BOOTSTRAP_ADMIN_PASSWORD: "password"
+    ports:
+      - "8081:8080"                        # UI d’admin Keycloak (http://localhost:8081/idp)
+    healthcheck:
+      test: ["CMD-SHELL", "bash /opt/keycloak/health-check.sh"]
+      interval: 5s
+      timeout: 10s
+      retries: 12
+      start_period: 30s
+    volumes:
+      - ./keycloak/extra/health-check.sh:/opt/keycloak/health-check.sh
+      - ./keycloak/realms/:/opt/keycloak/data/import
+    networks:
+      - default
+
+  pid-issuer:
+    image: ghcr.io/eu-digital-identity-wallet/eudi-srv-pid-issuer:edge
+    container_name: pid-issuer
+    depends_on:
+      keycloak:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: "insecure"
+      SERVER_PORT: 8080
+      SERVER_FORWARD_HEADERS_STRATEGY: "FRAMEWORK"
+
+      # URL publique vue par le wallet (on ne change pas)
+      ISSUER_PUBLICURL: "https://10.0.2.2:9443"
+
+      # URL publique de l’AS vue par le wallet (idem)
+      ISSUER_AUTHORIZATIONSERVER_PUBLICURL: "https://10.0.2.2:9443/idp/realms/pid-issuer-realm"
+
+      # Metadata OIDC côté issuer (interne vers Keycloak)
+      ISSUER_AUTHORIZATIONSERVER_METADATA: "http://keycloak:8080/idp/realms/pid-issuer-realm/.well-known/openid-configuration"
+
+      # URL d’introspection côté issuer (interne, via HAProxy)
+      ISSUER_AUTHORIZATIONSERVER_INTROSPECTION: "https://haproxy:8443/idp/realms/pid-issuer-realm/protocol/openid-connect/token/introspect"
+
+      # Ressource server en mode OPAQUE
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_OPAQUETOKEN_CLIENT_ID: "pid-issuer-srv"
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_OPAQUETOKEN_CLIENT_SECRET: "zIKAV9DIIIaJCzHCVBPlySgU8KgY68U2"
+
+      ISSUER_CREDENTIALRESPONSEENCRYPTION_SUPPORTED: "true"
+      ISSUER_CREDENTIALRESPONSEENCRYPTION_REQUIRED: "true"
+      ISSUER_CREDENTIALRESPONSEENCRYPTION_ALGORITHMSSUPPORTED: "ECDH-ES"
+      ISSUER_CREDENTIALRESPONSEENCRYPTION_ENCRYPTIONMETHODS: "A128GCM"
+
+      ISSUER_PID_MSO_MDOC_ENABLED: "true"
+      ISSUER_PID_MSO_MDOC_ENCODER_DURATION: "P30D"
+      ISSUER_PID_MSO_MDOC_NOTIFICATIONS_ENABLED: "true"
+
+      ISSUER_PID_SD_JWT_VC_ENABLED: "true"
+      ISSUER_PID_SD_JWT_VC_NOTUSEBEFORE: "PT20S"
+      ISSUER_PID_SD_JWT_VC_NOTIFICATIONS_ENABLED: "true"
+
+      ISSUER_PID_ISSUINGCOUNTRY: "GR"
+      ISSUER_PID_ISSUINGJURISDICTION: "GR-I"
+
+      ISSUER_MDL_ENABLED: "true"
+      ISSUER_MDL_MSO_MDOC_ENCODER_DURATION: "P5D"
+      ISSUER_MDL_NOTIFICATIONS_ENABLED: "true"
+
+      ISSUER_CREDENTIALOFFER_URI: "openid-credential-offer://"
+      ISSUER_SIGNING_KEY: "GenerateRandom"
+
+      ISSUER_KEYCLOAK_SERVER_URL: "http://keycloak:8080/idp"
+      ISSUER_KEYCLOAK_AUTHENTICATION_REALM: "master"
+      ISSUER_KEYCLOAK_CLIENT_ID: "admin-cli"
+      ISSUER_KEYCLOAK_USERNAME: "admin"
+      ISSUER_KEYCLOAK_PASSWORD: "password"
+      ISSUER_KEYCLOAK_USER_REALM: "pid-issuer-realm"
+
+      ISSUER_DPOP_PROOF_MAX_AGE: "PT1M"
+      ISSUER_DPOP_CACHE_PURGE_INTERVAL: "PT10M"
+      ISSUER_DPOP_REALM: "pid-issuer"
+      ISSUER_DPOP_NONCE_ENABLED: "false"
+
+      ISSUER_CREDENTIALENDPOINT_BATCHISSUANCE_ENABLED: "true"
+      ISSUER_CREDENTIALENDPOINT_BATCHISSUANCE_BATCHSIZE: "10"
+      ISSUER_CNONCE_EXPIRATION: "PT5M"
+
+  haproxy:
+    image: haproxy:2.8.3
+    container_name: haproxy
+    depends_on:
+      keycloak:
+        condition: service_healthy
+      pid-issuer:
+        condition: service_started
+    ports:
+      - "9080:8080"                        # HTTP (debug)
+      - "9443:8443"                        # HTTPS → utilisé par l’émulateur (https://10.0.2.2:9443/...)
+    volumes:
+      - ./haproxy/haproxy.conf:/usr/local/etc/haproxy/haproxy.cfg
+      - ./haproxy/certs/:/etc/ssl/certs/
+    networks:
+      - default
+
+networks:
+  default:
+    driver: bridge
 ```
 
-En principe, vous n’avez pas besoin de modifier les valeurs pour le scénario de base.
+Points à retenir :
+
+- Keycloak est exposé **en HTTP** en interne (`keycloak:8080`), TLS est géré par HAProxy en frontal.  
+- Le Wallet voit l’issuer à l’URL : `https://10.0.2.2:9443`.  
+- L’issuer parle à Keycloak :
+  - en **interne** via `http://keycloak:8080/...` pour la configuration OIDC,  
+  - en **interne** via `https://haproxy:8443/...` pour l’introspection, en passant par HAProxy.  
 
 ### 4.3. Démarrer l’issuer
 
@@ -192,11 +323,12 @@ docker compose up -d
 docker compose ps
 ```
 
-Vous devez voir les services issuer en Up (API, UI, proxy éventuel).
+Vous devez voir les services `keycloak`, `pid-issuer`, `haproxy` en **Up**.
 
 ### 4.4. Test rapide
 
-Ouvrir dans un navigateur l’UI issuer locale (URL indiquée dans le README du dossier issuer ou dans le `.env`) ; vous devez pouvoir déclencher un flux d’émission de PID.
+- Accéder à l’admin Keycloak : <http://localhost:8081/idp> (admin / admin).  
+- L’issuer sera atteint par le Wallet via : `https://10.0.2.2:9443`.  
 
 ---
 
@@ -245,8 +377,8 @@ Une fois toutes les briques démarrées :
 
 ### 6.1. Vérifier que l’Issuer est UP
 
-- Accéder à son UI dans le navigateur.
-- Vérifier que l’endpoint d’émission PID est disponible.
+- Accéder à son UI / logs.
+- Vérifier que l’endpoint d’émission PID est disponible (via l’issuer).
 
 ### 6.2. Émettre un PID vers le Wallet
 
@@ -284,9 +416,19 @@ docker compose ps
 curl -vk https://localhost:9444
 ```
 
+### `fail to connect to /10.0.2.2:9443`
+
+→ HAProxy de l’issuer ne tourne pas, ou le port 9443 n’est pas exposé.  
+→ Vérifier :
+
+```bash
+docker compose ps
+curl -vk https://localhost:9443
+```
+
 ### Erreur de certificat TLS dans l’émulateur
 
-→ Certificat self-signed utilisé par HAProxy.  
+→ Certificat self-signed utilisé par les HAProxy.  
 → Pour la démo, le flux a été ajusté pour que le Wallet puisse fonctionner dans ce contexte de test.
 
 ### `Invalid resolution: UnsupportedClientIdPrefix` dans les logs Wallet
@@ -297,4 +439,4 @@ curl -vk https://localhost:9444
 ### `{"error":"InvalidVpToken", "description": "... sd-jwt vc requires issuer-metadata ..."}` côté verifier
 
 → Le verifier reçoit un SD-JWT VC alors que la vérification via issuer-metadata n’est pas activée.  
-→ Ici, le Wallet est configuré pour n’envoyer que du mso_mdoc pour ce scénario, ce qui contourne le problème pour la démo.
+→ Ici, le Wallet est configuré pour n’envoyer que du `mso_mdoc` pour ce scénario, ce qui contourne le problème pour la démo.
