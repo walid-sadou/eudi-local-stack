@@ -463,12 +463,12 @@ docker compose ps
 
 - Accéder à Keycloak : <http://localhost:8081/idp>.
 
-### 6.2. Émettre un PID vers le Wallet (flux initié depuis le Wallet)
+### 6.2. Émettre un PID mdoc vers le Wallet (flux initié depuis le Wallet)
 
 Dans ce setup, **c’est le Wallet qui initie l’émission de PID** vers l’issuer local :
 
-1. Dans l’app Wallet (dans l’émulateur), aller dans le menu permettant d’**ajouter un nouveau credential / PID**.
-2. Choisir l’option correspondant à l’**issuer local** (configuré pour pointer vers `https://10.0.2.2:9443`).
+1. Dans l’app Wallet (dans l’émulateur), aller dans le menu permettant d’**ajouter un nouveau credential / PID**, puis sélectionner explicitement un **PID au format mdoc** (et non SD-JWT pour ce scénario).
+2. Choisir ensuite l’option correspondant à l’**issuer local** (configuré pour pointer vers `https://10.0.2.2:9443`).
 3. Le Wallet redirige vers Keycloak (authentification de l’utilisateur `tneal` dans le realm `pid-issuer-realm`).
 4. Une fois l’auth terminée, l’issuer renvoie un PID au Wallet.
 5. Vérifier dans le Wallet que le PID (mDoc) est bien stocké.
