@@ -464,11 +464,14 @@ Dans ce setup, **c’est le Wallet qui initie l’émission de PID** vers l’is
 
 > 📌 Il n’y a pas de QR à scanner ni d’URL à copier/coller : toute l’initiation du flux se fait directement dans l’UI du Wallet, qui contacte l’issuer local.
 
-### 6.3. Tester la présentation du PID vers le Verifier
+### 6.3. Tester la présentation du PID vers le Verifier (depuis l’émulateur via deep link)
 
-1. Ouvrir l’UI du verifier (port `4300` sur votre machine).  
-2. Démarrer une nouvelle “verification request” via l’UI (génération d’un QR ou d’un lien).  
-3. Depuis l’émulateur, utiliser le Wallet pour répondre à cette requête (scan du QR ou ouverture du lien selon votre configuration).  
+1. Dans le navigateur de l’émulateur Android, ouvrir l’UI du verifier, par exemple :  
+   `https://10.0.2.2:4300`
+2. Depuis cette UI, démarrer une nouvelle “verification request”.  
+   L’UI génère alors un lien de présentation utilisant un schéma de type `openid4vp://` / `eudi-openid4vp://`.
+3. Cliquer sur ce lien **dans l’émulateur** : le deep link ouvre automatiquement le Wallet.
+4. Dans le Wallet, sélectionner le PID précédemment émis et valider l’envoi.
 
 Le Wallet doit :
 
