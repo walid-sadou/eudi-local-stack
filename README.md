@@ -6,11 +6,22 @@ Ce dépôt permet de lancer en local un scénario de bout en bout :
 
 Il regroupe :
 
-- `wallet/`   → Wallet Android EUDI  
-- `verifier/` → Verifier (backend + UI web)  
-- `issuer/`   → Issuer PID (+ Keycloak + HAProxy)  
+- `wallet/`   → Wallet Android EUDI
+- `verifier/` → Verifier (backend + UI web)
+- `issuer/`   → Issuer PID (+ Keycloak + HAProxy)
 
 L’objectif est que n’importe quel·le collègue puisse rejouer le flux **sans** avoir à reconfigurer TLS, Docker, Android, Keycloak, etc.
+
+## 📚 Sommaire
+
+- [1. Prérequis](#1-prérequis)
+- [2. Vue d’ensemble de l’architecture](#2-vue-densemble-de-larchitecture)
+- [3. Lancer le Verifier local](#3-lancer-le-verifier-local)
+- [4. Lancer l’Issuer local](#4-lancer-lissuer-local)
+- [5. Lancer le Wallet Android](#5-lancer-le-wallet-android)
+- [6. Scénario de test de bout en bout](#6-scénario-de-test-de-bout-en-bout)
+- [7. Certificats TLS et confiance du Wallet](#7-certificats-tls-et-confiance-du-wallet)
+- [8. Dépannage rapide (FAQ)](#8-dépannage-rapide-faq)
 
 ---
 
@@ -47,18 +58,18 @@ Test rapide Android :
 
 En local, on va :
 
-- faire tourner **Issuer** et **Verifier** dans des conteneurs Docker,  
-- faire tourner **HAProxy** devant ces services pour gérer le HTTPS,  
+- faire tourner **Issuer** et **Verifier** dans des conteneurs Docker,
+- faire tourner **HAProxy** devant ces services pour gérer le HTTPS,
 - lancer le **Wallet Android** dans un émulateur, qui communiquera avec les backends via l’IP spéciale `10.0.2.2`.
 
 🔍 `10.0.2.2` est l’alias standard dans l’émulateur Android qui pointe sur le **localhost de votre machine** (là où tourne Docker).
 
 **Architecture logique du test :**
 
-1. Le **Wallet** déclenche un flux d’**émission** et appelle l’**Issuer local** (`https://10.0.2.2:9443/...`) pour obtenir un PID.  
-2. Le Wallet stocke ce PID (mDoc).  
-3. Le **Verifier** lance une requête de présentation.  
-4. Le Wallet, sur l’émulateur, appelle le verifier via `https://10.0.2.2:9444/...` et présente le PID.  
+1. Le **Wallet** déclenche un flux d’**émission** et appelle l’**Issuer local** (`https://10.0.2.2:9443/...`) pour obtenir un PID.
+2. Le Wallet stocke ce PID (mDoc).
+3. Le **Verifier** lance une requête de présentation.
+4. Le Wallet, sur l’émulateur, appelle le verifier via `https://10.0.2.2:9444/...` et présente le PID.
 
 ---
 
@@ -133,12 +144,12 @@ networks:
 
 Points importants :
 
-- `VERIFIER_PUBLICURL="https://10.0.2.2:9444"`  
-  → URL utilisée par le Wallet **depuis l’émulateur**.  
-- `HOST_API="https://10.0.2.2:9444"`  
-  → l’UI parle au même endpoint que le Wallet (via HAProxy).  
-- `9444:8443`  
-  → 8443 = port HTTPS interne dans le conteneur HAProxy, exposé sur 9444 sur votre machine.  
+- `VERIFIER_PUBLICURL="https://10.0.2.2:9444"`
+  → URL utilisée par le Wallet **depuis l’émulateur**.
+- `HOST_API="https://10.0.2.2:9444"`
+  → l’UI parle au même endpoint que le Wallet (via HAProxy).
+- `9444:8443`
+  → 8443 = port HTTPS interne dans le conteneur HAProxy, exposé sur 9444 sur votre machine.
 
 ### 3.3. Démarrer le verifier
 
@@ -159,7 +170,7 @@ Depuis votre machine (hors émulateur) :
 curl -vk https://localhost:9444/
 ```
 
-- Vous devez obtenir soit une page HTML (UI), soit une 404, mais **pas** une erreur de connexion.  
+- Vous devez obtenir soit une page HTML (UI), soit une 404, mais **pas** une erreur de connexion.
 
 ---
 
@@ -310,11 +321,11 @@ networks:
 
 Points à retenir :
 
-- Keycloak est exposé **en HTTP** en interne (`keycloak:8080`), TLS est géré par HAProxy en frontal.  
-- Le Wallet voit l’issuer à l’URL : `https://10.0.2.2:9443`.  
+- Keycloak est exposé **en HTTP** en interne (`keycloak:8080`), TLS est géré par HAProxy en frontal.
+- Le Wallet voit l’issuer à l’URL : `https://10.0.2.2:9443`.
 - L’issuer parle à Keycloak :
-  - en **interne** via `http://keycloak:8080/...` pour la configuration OIDC,  
-  - en **interne** via `https://haproxy:8443/...` pour l’introspection, en passant par HAProxy.  
+  - en **interne** via `http://keycloak:8080/...` pour la configuration OIDC,
+  - en **interne** via `https://haproxy:8443/...` pour l’introspection, en passant par HAProxy.
 
 ### 4.3. Démarrer l’issuer
 
@@ -327,8 +338,8 @@ Vous devez voir les services `keycloak`, `pid-issuer`, `haproxy` en **Up**.
 
 ### 4.4. Test rapide
 
-- Accéder à l’admin Keycloak : <http://localhost:8081/idp> (**admin / password**).  
-- L’issuer sera atteint par le Wallet via : `https://10.0.2.2:9443`.  
+- Accéder à l’admin Keycloak : <http://localhost:8081/idp> (**admin / password**).
+- L’issuer sera atteint par le Wallet via : `https://10.0.2.2:9443`.
 
 ### 4.5. Utilisateur de test pré-généré dans le realm
 
@@ -386,15 +397,15 @@ Le realm importé pour cet environnement contient un **utilisateur de test** dé
 
 En pratique :
 
-- **username** : `tneal`  
-- **rôle** : `eid-holder-natural-person` (titulaire « citoyen »)  
+- **username** : `tneal`
+- **rôle** : `eid-holder-natural-person` (titulaire « citoyen »)
 - **usage** : permet de tester un flux complet d’authentification / émission de PID sans créer d’utilisateur à la main.
 
-Le mot de passe est déjà défini dans le JSON du realm (`keycloak/realms/...`).  
+Le mot de passe est déjà défini dans le JSON du realm (`keycloak/realms/...`).
 Si besoin, vous pouvez le réinitialiser via l’UI :
 
-1. Ouvrir Keycloak (`http://localhost:8081/idp`),  
-2. Aller dans le realm `pid-issuer-realm` → **Users**,  
+1. Ouvrir Keycloak (`http://localhost:8081/idp`),
+2. Aller dans le realm `pid-issuer-realm` → **Users**,
 3. Sélectionner `tneal` et définir un nouveau mot de passe pour vos tests.
 
 ---
@@ -432,8 +443,8 @@ La configuration spécifique au verifier local est déjà câblée dans le code,
 
 ### 5.3. Lancer l’émulateur + l’app
 
-- Créer un AVD si nécessaire (Pixel 5, Android 13 par ex.).  
-- Sélectionner la configuration `app` et cliquer sur **Run ▶**.  
+- Créer un AVD si nécessaire (Pixel 5, Android 13 par ex.).
+- Sélectionner la configuration `app` et cliquer sur **Run ▶**.
 - L’app Wallet doit se lancer dans l’émulateur.
 
 ---
@@ -444,7 +455,7 @@ Une fois toutes les briques démarrées :
 
 ### 6.1. Vérifier que l’Issuer est UP
 
-- Vérifier que les conteneurs `keycloak`, `pid-issuer`, `haproxy` sont **Up** :  
+- Vérifier que les conteneurs `keycloak`, `pid-issuer`, `haproxy` sont **Up** :
 
 ```bash
 docker compose ps
@@ -456,32 +467,33 @@ docker compose ps
 
 Dans ce setup, **c’est le Wallet qui initie l’émission de PID** vers l’issuer local :
 
-1. Dans l’app Wallet (dans l’émulateur), aller dans le menu permettant d’**ajouter un nouveau credential / PID**.  
-2. Choisir l’option correspondant à l’**issuer local** (configuré pour pointer vers `https://10.0.2.2:9443`).  
-3. Le Wallet redirige vers Keycloak (authentification de l’utilisateur `tneal` dans le realm `pid-issuer-realm`).  
-4. Une fois l’auth terminée, l’issuer renvoie un PID au Wallet.  
+1. Dans l’app Wallet (dans l’émulateur), aller dans le menu permettant d’**ajouter un nouveau credential / PID**.
+2. Choisir l’option correspondant à l’**issuer local** (configuré pour pointer vers `https://10.0.2.2:9443`).
+3. Le Wallet redirige vers Keycloak (authentification de l’utilisateur `tneal` dans le realm `pid-issuer-realm`).
+4. Une fois l’auth terminée, l’issuer renvoie un PID au Wallet.
 5. Vérifier dans le Wallet que le PID (mDoc) est bien stocké.
 
 > 📌 Il n’y a pas de QR à scanner ni d’URL à copier/coller : toute l’initiation du flux se fait directement dans l’UI du Wallet, qui contacte l’issuer local.
 
 ### 6.3. Tester la présentation du PID vers le Verifier (depuis l’émulateur via deep link)
 
-1. Dans le navigateur de l’émulateur Android, ouvrir l’UI du verifier:  
+1. Dans le navigateur de l’émulateur Android, ouvrir l’UI du verifier:
    `https://10.0.2.2:4300`
-2. Depuis cette UI, démarrer une nouvelle “verification request”.  
+2. Depuis cette UI, démarrer une nouvelle “verification request”.
    L’UI génère alors un lien de présentation utilisant un schéma de type `openid4vp://` / `eudi-openid4vp://`.
 3. Cliquer sur ce lien **dans l’émulateur** : le deep link ouvre automatiquement le Wallet.
 4. Dans le Wallet, sélectionner le PID précédemment émis et valider l’envoi.
 
 Le Wallet doit :
 
-- appeler `https://10.0.2.2:9444/wallet/request.jwt/...`,  
-- proposer le PID en présentation,  
-- envoyer la réponse vers le verifier.  
+- appeler `https://10.0.2.2:9444/wallet/request.jwt/...`,
+- proposer le PID en présentation,
+- envoyer la réponse vers le verifier.
 
 Le verifier doit afficher le résultat de la vérification (succès).
 
 ---
+
 ## 7. Certificats TLS et confiance du Wallet
 
 Par défaut, l’émulateur Android ne connaît pas nos certificats TLS « maison ». Pour que le Wallet accepte les connexions HTTPS vers l’issuer et le verifier, nous avons :
@@ -499,15 +511,17 @@ En pratique, cela signifie que :
   - soit vous devez les signer avec la même clé/certificat déjà installé dans l’émulateur,
   - soit vous devez **réinstaller un nouveau certificat de confiance dans l’émulateur** et refaire la démarche.
 
-  👉 Dans l’état, cette stack fonctionne donc uniquement avec **les certificats fournis / attendus par ce repo**. Si vous changez de certificats, vous devez impérativement refaire la procédure d’installation du certificat dans l’émulateur pour que le Wallet continue à accepter les connexions HTTPS.
+👉 Dans l’état, cette stack fonctionne donc uniquement avec **les certificats fournis / attendus par ce repo**. Si vous changez de certificats, vous devez impérativement refaire la procédure d’installation du certificat dans l’émulateur pour que le Wallet continue à accepter les connexions HTTPS.
+
 ---
+
 ## 8. Dépannage rapide (FAQ)
 
 Quelques messages d’erreur typiques et leur cause :
 
 ### `fail to connect to /10.0.2.2:9444`
 
-→ HAProxy/verifier ne tourne pas, ou le port 9444 n’est pas exposé.  
+→ HAProxy/verifier ne tourne pas, ou le port 9444 n’est pas exposé.
 → Vérifier :
 
 ```bash
@@ -517,7 +531,7 @@ curl -vk https://localhost:9444
 
 ### `fail to connect to /10.0.2.2:9443`
 
-→ HAProxy de l’issuer ne tourne pas, ou le port 9443 n’est pas exposé.  
+→ HAProxy de l’issuer ne tourne pas, ou le port 9443 n’est pas exposé.
 → Vérifier :
 
 ```bash
@@ -527,15 +541,15 @@ curl -vk https://localhost:9443
 
 ### Erreur de certificat TLS dans l’émulateur
 
-→ Certificat self-signed utilisé par les HAProxy.  
+→ Certificat self-signed utilisé par les HAProxy.
 → Pour la démo, le flux a été ajusté pour que le Wallet puisse fonctionner dans ce contexte de test.
 
 ### `Invalid resolution: UnsupportedClientIdPrefix` dans les logs Wallet
 
-→ Schéma de `client_id` non reconnu (ancienne config).  
+→ Schéma de `client_id` non reconnu (ancienne config).
 → Dans ce repo, cela a été corrigé : le verifier "Verifier" est pré-enregistré dans le Wallet, vous ne devriez plus voir cette erreur.
 
 ### `{"error":"InvalidVpToken", "description": "... sd-jwt vc requires issuer-metadata ..."}` côté verifier
 
-→ Le verifier reçoit un SD-JWT VC alors que la vérification via issuer-metadata n’est pas activée.  
+→ Le verifier reçoit un SD-JWT VC alors que la vérification via issuer-metadata n’est pas activée.
 → Ici, le Wallet est configuré pour n’envoyer que du `mso_mdoc` pour ce scénario, ce qui contourne le problème pour la démo.
