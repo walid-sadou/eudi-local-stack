@@ -10,7 +10,6 @@ Il regroupe :
 - `verifier/` → Verifier (backend + UI web)
 - `issuer/`   → Issuer PID (+ Keycloak + HAProxy)
 
-L’objectif est que n’importe quel·le collègue puisse rejouer le flux **sans** avoir à reconfigurer TLS, Docker, Android, Keycloak, etc.
 
 ## 📚 Sommaire
 
