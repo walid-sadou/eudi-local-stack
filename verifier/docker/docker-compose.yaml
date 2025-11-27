@@ -10,8 +10,6 @@ services:
 
       # Mode de réponse utilisé par le verifier dans la JAR
       VERIFIER_RESPONSE_MODE: "DirectPost"
-      # (rien à ajouter pour le client_id, le "Verifier" que tu as mis
-      # en dur côté wallet suffit)
 
     networks:
       - verifier_net
